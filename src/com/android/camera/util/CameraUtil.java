@@ -248,8 +248,12 @@ public class CameraUtil {
         sPixelDensity = metrics.density;
         sImageFileNamer = new ImageFileNamer(
                 context.getString(R.string.image_file_name_format));
-        sDeviceKeysPresent = context.getResources().getInteger(
-                org.lineageos.platform.internal.R.integer.config_deviceHardwareKeys);
+        try {
+            sDeviceKeysPresent = context.getResources().getInteger(
+                    org.lineageos.platform.internal.R.integer.config_deviceHardwareKeys);
+        } catch (Exception e) {
+            sDeviceKeysPresent = 3;
+        }
     }
 
     public static int dpToPixel(int dp) {
