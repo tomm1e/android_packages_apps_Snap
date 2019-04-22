@@ -1798,7 +1798,7 @@ public class VideoModule implements CameraModule,
         }
 
         mMediaRecorder.setVideoSize(mProfile.videoFrameWidth, mProfile.videoFrameHeight);
-        mMediaRecorder.setMaxDuration(mMaxVideoDurationInMs);
+        //mMediaRecorder.setMaxDuration(mMaxVideoDurationInMs);
         if (mCaptureTimeLapse) {
             double fps = 1000 / (double) mTimeBetweenTimeLapseFrameCaptureMs;
             setCaptureRate(mMediaRecorder, fps);
@@ -1849,7 +1849,9 @@ public class VideoModule implements CameraModule,
         }
 
         try {
-            mMediaRecorder.setMaxFileSize(maxFileSize);
+            // mMediaRecorder.setMaxFileSize(maxFileSize);
+            Log.v(TAG, "Setting max file size to: 0");
+            mMediaRecorder.setMaxFileSize(0);
         } catch (RuntimeException exception) {
             // We are going to ignore failure of setMaxFileSize here, as
             // a) The composer selected may simply not support it, or
