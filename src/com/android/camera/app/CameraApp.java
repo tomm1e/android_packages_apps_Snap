@@ -24,6 +24,7 @@ import com.android.camera.SDCard;
 import com.android.camera.util.CameraUtil;
 import com.android.camera.util.UsageStatistics;
 import com.android.camera.SettingsManager;
+import com.android.camera.Album;
 
 public class CameraApp extends Application {
     private static long mMaxSystemMemory;
@@ -46,6 +47,8 @@ public class CameraApp extends Application {
         UsageStatistics.initialize(this);
         CameraUtil.initialize(this);
         SDCard.initialize(this);
+        Album.initialize(this);
+        Album.instance().loadPreferences();
     }
 
     public static Context getContext() {

@@ -556,6 +556,8 @@ public class MediaSaveService extends Service {
             values.put(Video.Media.SIZE, new File(path).length());
             values.put(Video.Media.DURATION, duration);
             Uri uri = null;
+            if (Album.instance().isAlbumHidden()) return uri;
+
             try {
                 Uri videoTable = Uri.parse(VIDEO_BASE_URI);
                 uri = resolver.insert(videoTable, values);

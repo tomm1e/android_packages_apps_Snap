@@ -5010,6 +5010,10 @@ public class PhotoModule
             mUI.setPreference(CameraSettings.KEY_ADVANCED_FEATURES, pref.getValue());
         }
 
+        if (Album.instance().handleAlbumPreferenceAction(pref, mActivity)) {
+            mUI.collapseCameraControls();
+        }
+
         //call generic onSharedPreferenceChanged
         onSharedPreferenceChanged();
     }

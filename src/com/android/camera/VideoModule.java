@@ -2222,12 +2222,7 @@ public class VideoModule implements CameraModule,
         // Used when emailing.
         String filename = title + convertOutputFormatToFileExt(outputFileFormat);
         String mime = convertOutputFormatToMimeType(outputFileFormat);
-        String path = null;
-        if (Storage.isSaveSDCard() && SDCard.instance().isWriteable()) {
-            path = SDCard.instance().getDirectory() + '/' + filename;
-        } else {
-            path = Storage.DIRECTORY + '/' + filename;
-        }
+        String path = Album.instance().makeAlbumPath(filename);
         mCurrentVideoValues = new ContentValues(9);
         mCurrentVideoValues.put(Video.Media.TITLE, title);
         mCurrentVideoValues.put(Video.Media.DISPLAY_NAME, filename);
@@ -3392,6 +3387,11 @@ public class VideoModule implements CameraModule,
                     }
                 }
             }
+        }
+
+        // Album Type
+        if (Album.instance().handleAlbumPreferenceAction(pref, mActivity)) {
+            mUI.collapseCameraControls();
         }
 
         // Video Bitrate

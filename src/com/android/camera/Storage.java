@@ -225,11 +225,7 @@ public class Storage {
 
     public static String generateFilepath(String title, String pictureFormat) {
         if (pictureFormat == null || pictureFormat.equalsIgnoreCase("jpeg")) {
-            if (isSaveSDCard() && SDCard.instance().isWriteable()) {
-                return SDCard.instance().getDirectory() + '/' + title + ".jpg";
-            } else {
-                return DIRECTORY + '/' + title + ".jpg";
-            }
+            return Album.instance().makeAlbumPath(title + ".jpg");
         } else {
             return RAW_DIRECTORY + '/' + title + ".raw";
         }
@@ -306,6 +302,8 @@ public class Storage {
 
     private static Uri insertImage(ContentResolver resolver, ContentValues values) {
         Uri uri = null;
+        if (Album.instance().isAlbumHidden()) return uri;
+
         try {
             uri = resolver.insert(Images.Media.EXTERNAL_CONTENT_URI, values);
         } catch (Throwable th)  {
