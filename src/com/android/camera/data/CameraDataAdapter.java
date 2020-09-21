@@ -27,13 +27,13 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 
-import com.android.camera.SDCard;
-import com.android.camera.Storage;
+import com.android.camera.StorageMedia;
 import com.android.camera.app.PlaceholderManager;
 import com.android.camera.ui.FilmStripView.ImageData;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Set;
 
 /**
  * A {@link LocalDataAdapter} that provides data in the camera folder.
@@ -141,11 +141,8 @@ public class CameraDataAdapter implements LocalDataAdapter {
     // TODO: put the database query on background thread
     @Override
     public void addNewVideo(ContentResolver cr, Uri uri) {
-        Cursor c = cr.query(uri,
-                LocalMediaData.VideoData.QUERY_PROJECTION,
-                MediaStore.Video.Media.DATA + " like ? or " +
-                MediaStore.Video.Media.DATA + " like ? ", getCameraPath(),
-                LocalMediaData.VideoData.QUERY_ORDER);
+        Cursor c = cr.query(uri, LocalMediaData.VideoData.QUERY_PROJECTION, null, null,
+            LocalMediaData.VideoData.QUERY_ORDER);
         if (c == null || !c.moveToFirst()) {
             return;
         }
@@ -168,11 +165,8 @@ public class CameraDataAdapter implements LocalDataAdapter {
     // TODO: put the database query on background thread
     @Override
     public void addNewPhoto(ContentResolver cr, Uri uri) {
-        Cursor c = cr.query(uri,
-                LocalMediaData.PhotoData.QUERY_PROJECTION,
-                MediaStore.Images.Media.DATA + " like ? or " +
-                MediaStore.Images.Media.DATA + " like ? ", getCameraPath(),
-                LocalMediaData.PhotoData.QUERY_ORDER);
+        Cursor c = cr.query(uri, LocalMediaData.PhotoData.QUERY_PROJECTION, null, null,
+            LocalMediaData.PhotoData.QUERY_ORDER);
         if (c == null || !c.moveToFirst()) {
             return;
         }
@@ -279,12 +273,6 @@ public class CameraDataAdapter implements LocalDataAdapter {
         }
     }
 
-    private static String[] getCameraPath() {
-        String[] cameraPath =
-                {Storage.DIRECTORY + "/%", SDCard.instance().getDirectory() + "/%"};
-        return cameraPath;
-    }
-
     private class QueryTask extends AsyncTask<ContentResolver, Void, LocalDataList> {
 
         /**
@@ -297,63 +285,64 @@ public class CameraDataAdapter implements LocalDataAdapter {
         @Override
         protected LocalDataList doInBackground(ContentResolver... resolver) {
             LocalDataList l = new LocalDataList();
-            // Photos
-            Cursor c = resolver[0].query(
-                    LocalMediaData.PhotoData.CONTENT_URI,
-                    LocalMediaData.PhotoData.QUERY_PROJECTION,
-                    MediaStore.Images.Media.DATA + " like ? or " +
-                    MediaStore.Images.Media.DATA + " like ? ", getCameraPath(),
-                    LocalMediaData.PhotoData.QUERY_ORDER);
-            if (c != null && c.moveToFirst()) {
-                // build up the list.
-                while (true) {
-                    LocalData data = LocalMediaData.PhotoData.buildFromCursor(c);
-                    if (data != null) {
-                        if (data.getMimeType().equals(PlaceholderManager.PLACEHOLDER_MIME_TYPE)) {
-                            l.add(new InProgressDataWrapper(data, true));
-                        } else {
-                            l.add(data);
-                        }
-                    } else {
-                        Log.e(TAG, "Error loading data:"
-                                + c.getString(LocalMediaData.PhotoData.COL_DATA));
-                    }
-                    if (c.isLast()) {
-                        break;
-                    }
-                    c.moveToNext();
-                }
-            }
-            if (c != null) {
-                c.close();
-            }
 
-            c = resolver[0].query(
-                    LocalMediaData.VideoData.CONTENT_URI,
-                    LocalMediaData.VideoData.QUERY_PROJECTION,
-                    MediaStore.Video.Media.DATA + " like ? or " +
-                    MediaStore.Video.Media.DATA + " like ? ", getCameraPath(),
-                    LocalMediaData.VideoData.QUERY_ORDER);
-            if (c != null && c.moveToFirst()) {
-                // build up the list.
-                c.moveToFirst();
-                while (!isCancelled()) {
-                    LocalData data = LocalMediaData.VideoData.buildFromCursor(c);
-                    if (data != null) {
-                        l.add(data);
-                    } else {
-                        Log.e(TAG, "Error loading data:"
-                                + c.getString(LocalMediaData.VideoData.COL_DATA));
-                    }
-                    if (!c.isLast()) {
+            // Traverse through all volumes
+            Set<String> volumes = StorageMedia.instance().getVolumes();
+            for (String volume : volumes) {
+                // Photos
+                Cursor c = resolver[0].query(MediaStore.Images.Media.getContentUri(volume),
+                    LocalMediaData.PhotoData.QUERY_PROJECTION, null, null,
+                    LocalMediaData.PhotoData.QUERY_ORDER);
+
+                if (c != null && c.moveToFirst()) {
+                    // build up the list.
+                    while (true) {
+                        LocalData data = LocalMediaData.PhotoData.buildFromCursor(c);
+                        if (data != null) {
+                            if (data.getMimeType().equals(PlaceholderManager.PLACEHOLDER_MIME_TYPE)) {
+                                l.add(new InProgressDataWrapper(data, true));
+                            } else {
+                                l.add(data);
+                            }
+                        } else {
+                            Log.e(TAG, "Error loading data:"
+                                    + c.getString(LocalMediaData.PhotoData.COL_DATA));
+                        }
+                        if (c.isLast()) {
+                            break;
+                        }
                         c.moveToNext();
-                    } else {
-                        break;
                     }
                 }
-            }
-            if (c != null) {
-                c.close();
+                if (c != null) {
+                    c.close();
+                }
+
+                // Videos
+                Cursor cv = resolver[0].query(MediaStore.Video.Media.getContentUri(volume),
+                    LocalMediaData.VideoData.QUERY_PROJECTION, null, null,
+                    LocalMediaData.VideoData.QUERY_ORDER);
+                if (cv != null && cv.moveToFirst()) {
+                    // build up the list.
+                    cv.moveToFirst();
+                    while (!isCancelled()) {
+                        LocalData data = LocalMediaData.VideoData.buildFromCursor(cv);
+                        if (data != null) {
+                            l.add(data);
+                        } else {
+                            Log.e(TAG, "Error loading data:"
+                                    + cv.getString(LocalMediaData.VideoData.COL_DATA));
+                        }
+                        if (!cv.isLast()) {
+                            cv.moveToNext();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                if (cv != null) {
+                    cv.close();
+                }
             }
 
             if (l.size() != 0) {

@@ -181,6 +181,10 @@ public class VideoModule implements CameraModule,
     private boolean mCurrentVideoUriFromMediaSaved;
     private ContentValues mCurrentVideoValues;
 
+    // MediaStore variables
+    private Uri mVideoFileURI;
+    private ParcelFileDescriptor mVideoFileDescriptorMS;
+
     private CamcorderProfile mProfile;
 
     // The video duration limit. 0 menas no limit.
@@ -2148,8 +2152,24 @@ public class VideoModule implements CameraModule,
         if (mVideoFileDescriptor != null) {
             mMediaRecorder.setOutputFile(mVideoFileDescriptor.getFileDescriptor());
         } else {
-            generateVideoFilename(mProfile.fileFormat);
-            mMediaRecorder.setOutputFile(mVideoFilename);
+            mVideoFileURI = generateVideoFileURI(mProfile.fileFormat);
+            if (mVideoFileURI == null) {
+                // Failed
+                Log.e(TAG, "StorageMedia: Failed to create Uri");
+                RotateTextToast.makeText(mActivity, "Failed: 1000",
+                    Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            try {
+                mVideoFileDescriptorMS = mContentResolver.openFileDescriptor(mVideoFileURI, "rw");
+                mMediaRecorder.setOutputFile(mVideoFileDescriptorMS.getFileDescriptor());
+            } catch (Exception e) {
+                Log.e(TAG, "StorageMedia: Failed to open file descriptor", e);
+                RotateTextToast.makeText(mActivity, "Failed: 1001",
+                    Toast.LENGTH_LONG).show();
+                return;
+            }
         }
 
         // Set maximum file size.
@@ -2225,6 +2245,38 @@ public class VideoModule implements CameraModule,
         mVideoFilename = null;
     }
 
+    private Uri generateVideoFileURI(int outputFileFormat) {
+        long dateTaken = System.currentTimeMillis();
+        String title = createName(dateTaken);
+        String filename = title + convertOutputFormatToFileExt(outputFileFormat);
+        String mime = convertOutputFormatToMimeType(outputFileFormat);
+
+        mCurrentVideoValues = new ContentValues();
+        mCurrentVideoValues.put(Video.Media.RELATIVE_PATH,
+                Album.instance().getAlbumPath());
+        mCurrentVideoValues.put(Video.Media.TITLE, title);
+        mCurrentVideoValues.put(Video.Media.DISPLAY_NAME, filename);
+        mCurrentVideoValues.put(Video.Media.MIME_TYPE, mime);
+        mCurrentVideoValues.put(MediaColumns.DATE_MODIFIED, dateTaken / 1000);
+        mCurrentVideoValues.put(Video.Media.DATE_TAKEN, dateTaken);
+        mCurrentVideoValues.put(Video.Media.IS_PENDING, 1);
+        mCurrentVideoValues.put(Video.Media.RESOLUTION,
+                Integer.toString(mProfile.videoFrameWidth) + "x" +
+                Integer.toString(mProfile.videoFrameHeight));
+
+        mVideoFilename = filename;
+
+        Uri contentUri = MediaStore.Video.Media.getContentUri(
+            StorageMedia.instance().getSaveVolume());
+        Uri returnUri = null;
+        try {
+            returnUri = mContentResolver.insert(contentUri, mCurrentVideoValues);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return returnUri;
+    }
+
     private void generateVideoFilename(int outputFileFormat) {
         long dateTaken = System.currentTimeMillis();
         String title = createName(dateTaken);
@@ -2254,6 +2306,60 @@ public class VideoModule implements CameraModule,
         }
         mVideoFilename = path;
         Log.v(TAG, "New video filename: " + mVideoFilename);
+    }
+
+    private void saveVideoMS() {
+        Log.d(TAG, "Add from FD...");
+        long duration = 0L;
+        int rotation = 0;
+        int width = 0;
+        int height = 0;
+        // int bitrate = 0;
+        // double fps = 0;
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+
+        try {
+            retriever.setDataSource(mVideoFileDescriptorMS.getFileDescriptor());
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Cannot access file", e);
+        } finally {
+            duration = Long.valueOf(retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION));
+            rotation = Integer.valueOf(retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION));
+            width = Integer.valueOf(retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
+            height = Integer.valueOf(retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
+            // bitrate = Integer.valueOf(retriever.extractMetadata(
+            //     MediaMetadataRetriever.METADATA_KEY_BITRATE));
+            // fps = Double.valueOf(retriever.extractMetadata(
+            //     MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE));
+        }
+        retriever.release();
+
+        // Update the rest
+        long size = mVideoFileDescriptorMS.getStatSize();
+        // Log.d(TAG, "Details: " + size + ", " + bitrate);
+
+        mCurrentVideoValues.put(Video.Media.SIZE, size);
+        mCurrentVideoValues.put(Video.Media.DURATION, duration);
+        mCurrentVideoValues.put(Video.Media.ORIENTATION, rotation);
+        mCurrentVideoValues.put(Video.Media.WIDTH, width);
+        mCurrentVideoValues.put(Video.Media.HEIGHT, height);
+
+        if (Album.instance().getAlbumType() !=
+            Album.ALBUM_TYPE_HIDDEN) {
+            mCurrentVideoValues.put(Video.Media.IS_PENDING, 0);
+        } else {
+            mCurrentVideoValues.put(MediaColumns.DATE_EXPIRES, Long.MAX_VALUE);
+        }
+
+        mContentResolver.update(mVideoFileURI, mCurrentVideoValues, null, null);
+
+        mOnVideoSavedListener.onMediaSaved(mVideoFileURI);
+
+        mCurrentVideoValues = null;
     }
 
     private void saveVideo() {
@@ -2587,8 +2693,8 @@ public class VideoModule implements CameraModule,
             mUI.setOrientationIndicator(0, true);
             keepScreenOnAwhile();
             if (shouldAddToMediaStoreNow && !fail) {
-                if (mVideoFileDescriptor == null) {
-                    saveVideo();
+                if (mVideoFileDescriptor == null && mVideoFileDescriptorMS != null) {
+                    saveVideoMS();
                 } else if (mIsVideoCaptureIntent) {
                     // if no file save is needed, we can show the post capture UI now
                     showCaptureResult();
@@ -3403,6 +3509,11 @@ public class VideoModule implements CameraModule,
             }
         }
 
+        // Album Type
+        if (Album.instance().handleAlbumPreferenceAction(pref, mActivity)) {
+            mUI.collapseCameraControls();
+        }
+
         // Video Bitrate
         if (pref != null && CameraSettings.KEY_VIDEO_BITRATE.equals(pref.getKey())) {
             String bitratePref = pref.getValue();
@@ -3430,6 +3541,16 @@ public class VideoModule implements CameraModule,
                     RotateTextToast.makeText(mActivity, "Set audio bitrate to " +
                         getRateString(mSelectedAEC.mMaxBitRate), Toast.LENGTH_SHORT).show();
                 break;
+            }
+        }
+
+        // Save Volume
+        if (pref != null && CameraSettings.KEY_CAMERA_SAVEPATH.equals(pref.getKey())) {
+            String savePath = mPreferences.getString(CameraSettings.KEY_CAMERA_SAVEPATH, "0");
+            if (savePath.equals("1")) {
+                StorageMedia.instance().setExternal();
+            } else {
+                StorageMedia.instance().setInternal();
             }
         }
 
@@ -3667,6 +3788,15 @@ public class VideoModule implements CameraModule,
                 Log.e(TAG, "Fail to close fd", e);
             }
             mVideoFileDescriptor = null;
+        }
+
+        if (mVideoFileDescriptorMS != null) {
+            try {
+                mVideoFileDescriptorMS.close();
+            } catch (IOException e) {
+                Log.e(TAG, "Fail to close fd", e);
+            }
+            mVideoFileDescriptorMS = null;
         }
     }
 

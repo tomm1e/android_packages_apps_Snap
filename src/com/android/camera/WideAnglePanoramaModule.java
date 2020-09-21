@@ -162,6 +162,50 @@ public class WideAnglePanoramaModule
 
     }
 
+    private class MediaSaveNotifyThread extends Thread
+    {
+        private Uri uri;
+        public MediaSaveNotifyThread(Uri uri)
+        {
+            this.uri = uri;
+        }
+        public void setUri(Uri uri)
+        {
+            this.uri = uri;
+        }
+        public void run()
+        {
+            mActivity.runOnUiThread(new Runnable() {
+                public void run() {
+                    if (uri != null)
+                        mActivity.notifyNewMedia(uri);
+                    mActivity.updateStorageSpaceAndHint();
+                }
+            });
+            mediaSaveNotifyThread = null;
+        }
+    }
+
+    private MediaSaveNotifyThread mediaSaveNotifyThread;
+    private MediaSaveService.OnMediaSavedListener mOnMediaSavedListener =
+    new MediaSaveService.OnMediaSavedListener() {
+        @Override
+        public void onMediaSaved(Uri uri) {
+            if(mThreadRunning) {
+                if(mediaSaveNotifyThread == null) {
+                    mediaSaveNotifyThread = new MediaSaveNotifyThread(uri);
+                    mediaSaveNotifyThread.start();
+                } else {
+                    mediaSaveNotifyThread.setUri(uri);
+                }
+            } else {
+                if (uri != null) {
+                    mActivity.notifyNewMedia(uri);
+                }
+            }
+        }
+    };
+
     private class MosaicJpeg {
         public MosaicJpeg(byte[] data, int width, int height) {
             this.data = data;
@@ -864,15 +908,15 @@ public class WideAnglePanoramaModule
         if (jpegData != null) {
             String filename = PanoUtil.createName(
                     mActivity.getResources().getString(R.string.pano_file_name_format), mTimeTaken);
-            String filepath = Storage.generateFilepath(filename,
-                              PhotoModule.PIXEL_FORMAT_JPEG);
-
             UsageStatistics.onEvent(UsageStatistics.COMPONENT_PANORAMA,
                     UsageStatistics.ACTION_CAPTURE_DONE, null, 0,
                     UsageStatistics.hashFileName(filename + ".jpg"));
 
             Location loc = mLocationManager.getCurrentLocation();
             ExifInterface exif = new ExifInterface();
+            String title = filename;
+            long date = System.currentTimeMillis();
+            ByteArrayOutputStream jpegOut = new ByteArrayOutputStream();
             try {
                 exif.readExif(jpegData);
                 exif.addMakeAndModelTag();
@@ -882,14 +926,11 @@ public class WideAnglePanoramaModule
                 exif.setTag(exif.buildTag(ExifInterface.TAG_ORIENTATION,
                         ExifInterface.getOrientationValueForRotation(orientation)));
                 writeLocation(loc, exif);
-                exif.writeExif(jpegData, filepath);
             } catch (IOException e) {
-                Log.e(TAG, "Cannot set exif for " + filepath, e);
-                Storage.writeFile(filepath, jpegData);
+                Log.e(TAG, "Could not read jpeg exif data", e);
             }
-            int jpegLength = (int) (new File(filepath).length());
-            return Storage.addImage(mContentResolver, filename, mTimeTaken, loc, orientation,
-                    jpegLength, filepath, width, height, LocalData.MIME_TYPE_JPEG);
+            mActivity.getMediaSaveService().addImage(jpegData, title, date, loc, width, height,
+                orientation, exif, mOnMediaSavedListener, mContentResolver, LocalData.MIME_TYPE_JPEG);
         }
         return null;
     }

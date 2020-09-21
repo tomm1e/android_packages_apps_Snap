@@ -4999,6 +4999,18 @@ public class PhotoModule
                     mPreferences.getString(CameraSettings.KEY_CAMERA_SAVEPATH, "0").equals("1"));
             mActivity.updateStorageSpaceAndHint();
             updateRemainingPhotos();
+
+            String savePath = mPreferences.getString(CameraSettings.KEY_CAMERA_SAVEPATH, "0");
+            if (savePath.equals("1")) {
+                StorageMedia.instance().setExternal();
+            } else {
+                StorageMedia.instance().setInternal();
+            }
+        }
+
+        // Album Type
+        if (Album.instance().handleAlbumPreferenceAction(pref, mActivity)) {
+            mUI.collapseCameraControls();
         }
 
         if (!CameraSettings.hasChromaFlashScene(mActivity) &&

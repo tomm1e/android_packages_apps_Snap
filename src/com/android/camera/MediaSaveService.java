@@ -438,8 +438,8 @@ public class MediaSaveService extends Service {
                 width = options.outWidth;
                 height = options.outHeight;
             }
-            return Storage.addImage(
-                    resolver, title, date, loc, orientation, exif, data, width, height, pictureFormat);
+            return StorageMedia.instance().addImage(
+                resolver, title, date, loc, orientation, exif, data, width, height, pictureFormat);
         }
 
         @Override

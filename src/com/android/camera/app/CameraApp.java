@@ -20,10 +20,12 @@ import android.app.ActivityManager;
 import android.app.Application;
 import android.content.Context;
 
+import com.android.camera.Album;
 import com.android.camera.SDCard;
 import com.android.camera.util.CameraUtil;
 import com.android.camera.util.UsageStatistics;
 import com.android.camera.SettingsManager;
+import com.android.camera.StorageMedia;
 
 public class CameraApp extends Application {
     private static long mMaxSystemMemory;
@@ -46,6 +48,10 @@ public class CameraApp extends Application {
         UsageStatistics.initialize(this);
         CameraUtil.initialize(this);
         SDCard.initialize(this);
+        StorageMedia.initialize(this);
+        StorageMedia.instance().loadPreferences();
+        Album.initialize(this);
+        Album.instance().loadPreferences();
     }
 
     public static Context getContext() {

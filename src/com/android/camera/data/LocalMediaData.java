@@ -38,12 +38,14 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
+import com.android.camera.StorageMedia;
 import com.android.camera.ui.FilmStripView;
 import com.android.camera.util.CameraUtil;
 import com.android.camera.util.PhotoSphereHelper;
 import org.codeaurora.snapcam.R;
 
 import java.io.File;
+import java.io.FileDescriptor;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -585,6 +587,7 @@ public abstract class LocalMediaData implements LocalData {
         public static final int COL_LATITUDE = 10;
         public static final int COL_LONGITUDE = 11;
         public static final int COL_DURATION = 12;
+        public static final int COL_ORIENTATION = 13;
 
         static final Uri CONTENT_URI = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
 
@@ -613,7 +616,8 @@ public abstract class LocalMediaData implements LocalData {
                 MediaStore.Video.VideoColumns.SIZE,          // 9 long
                 MediaStore.Video.VideoColumns.LATITUDE,      // 10 double
                 MediaStore.Video.VideoColumns.LONGITUDE,     // 11 double
-                MediaStore.Video.VideoColumns.DURATION       // 12 long
+                MediaStore.Video.VideoColumns.DURATION,      // 12 long
+                MediaStore.Video.VideoColumns.ORIENTATION    // 13 int
         };
 
         /** The duration in milliseconds. */
@@ -637,46 +641,9 @@ public abstract class LocalMediaData implements LocalData {
             String path = c.getString(COL_DATA);
             int width = c.getInt(COL_WIDTH);
             int height = c.getInt(COL_HEIGHT);
-            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-            String rotation = null;
+            int rotation = c.getInt(COL_ORIENTATION);
 
-            File origFile = new File(path);
-            if (!origFile.exists() || origFile.length() <= 0) {
-                Log.e(TAG, "Invalid video file");
-                retriever.release();
-                return null;
-            }
-
-            try {
-                retriever.setDataSource(path);
-            } catch (RuntimeException ex) {
-                // setDataSource() can cause RuntimeException beyond
-                // IllegalArgumentException. e.g: data contain *.avi file.
-                retriever.release();
-                Log.e(TAG, "MediaMetadataRetriever.setDataSource() fail:"
-                        + ex.getMessage());
-                return null;
-            }
-            rotation = retriever.extractMetadata(
-                    MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION);
-
-            // Extracts video height/width if available. If unavailable, set to 0.
-            if (width == 0 || height == 0) {
-                String val = retriever.extractMetadata(
-                        MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
-                width = (val == null) ? 0 : Integer.parseInt(val);
-                val = retriever.extractMetadata(
-                        MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
-                height = (val == null) ? 0 : Integer.parseInt(val);
-            }
-            retriever.release();
-            if (width == 0 || height == 0) {
-                // Width or height is still not available.
-                Log.e(TAG, "Unable to retrieve dimension of video:" + path);
-                return null;
-            }
-            if (rotation != null
-                    && (rotation.equals("90") || rotation.equals("270"))) {
+            if (rotation == 90 || rotation == 270) {
                 int b = width;
                 width = height;
                 height = b;
